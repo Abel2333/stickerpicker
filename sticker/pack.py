@@ -42,6 +42,11 @@ def convert_name(name: str) -> str:
     )
 
 
+def get_upload_filename(file: str, mimetype: str) -> str:
+    extension = mimetypes.guess_extension(mimetype) or os.path.splitext(file)[1]
+    return f"{os.path.splitext(file)[0]}{extension}"
+
+
 async def upload_sticker(
     file: str, directory: str, old_stickers: Dict[str, matrix.StickerInfo]
 ) -> Optional[matrix.StickerInfo]:
@@ -84,11 +89,18 @@ async def upload_sticker(
         upload_data, upload_mime, width, height = util.prepare_image_for_upload(
             image_data, mime=mime
         )
+        upload_filename = get_upload_filename(file, upload_mime)
         print(".", end="", flush=True)
-        mxc = await matrix.upload(upload_data, upload_mime, file)
+        mxc = await matrix.upload(upload_data, upload_mime, upload_filename)
         print(".", end="", flush=True)
         sticker = util.make_sticker(
-            mxc, width, height, len(upload_data), name, mimetype=upload_mime
+            mxc,
+            width,
+            height,
+            len(upload_data),
+            name,
+            mimetype=upload_mime,
+            filename=upload_filename,
         )
         sticker["id"] = sticker_id
         print(" uploaded", flush=True)

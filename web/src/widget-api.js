@@ -15,6 +15,21 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 let widgetId = null
 
+function extensionFromMimeType(mimetype) {
+	switch (mimetype) {
+	case "image/gif":
+		return "gif"
+	case "image/png":
+		return "png"
+	case "image/jpeg":
+		return "jpg"
+	case "image/webp":
+		return "webp"
+	default:
+		return "png"
+	}
+}
+
 window.onmessage = event => {
 	if (!window.parent || !event.data) {
 		return
@@ -60,7 +75,7 @@ export function sendSticker(content) {
 	const widgetData = {
 		...data,
 		description: content.body,
-		file: content.filename ?? `${content.id}.png`,
+		file: content.filename ?? `${content.id}.${extensionFromMimeType(content.info?.mimetype)}`,
 	}
 	delete widgetData.content.filename
 	// Element iOS explodes if there are extra fields present

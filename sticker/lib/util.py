@@ -93,9 +93,15 @@ def add_to_index(name: str, output_dir: str) -> None:
 
 
 def make_sticker(
-    mxc: str, width: int, height: int, size: int, body: str = "", mimetype: str = "image/png"
+    mxc: str,
+    width: int,
+    height: int,
+    size: int,
+    body: str = "",
+    mimetype: str = "image/png",
+    filename: str | None = None,
 ) -> matrix.StickerInfo:
-    return {
+    sticker = {
         "body": body,
         "url": mxc,
         "info": {
@@ -114,6 +120,9 @@ def make_sticker(
         },
         "msgtype": "m.sticker",
     }
+    if filename is not None:
+        sticker["filename"] = filename
+    return sticker
 
 
 def add_thumbnails(
