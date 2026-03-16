@@ -1,0 +1,6 @@
+{
+  "packs": [
+    "big-heads.json"
+  ],
+  "homeserver_url": "https://mozilla.modular.im"
+}
