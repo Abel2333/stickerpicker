@@ -37,11 +37,14 @@ def convert_name(name: str) -> str:
         ord(" "): ord("_"),
     }
     allowed_chars = string.ascii_letters + string.digits + "_-/.#"
-    return "".join(filter(lambda char: char in allowed_chars, name.translate(name_translate)))
+    return "".join(
+        filter(lambda char: char in allowed_chars, name.translate(name_translate))
+    )
 
 
-async def upload_sticker(file: str, directory: str, old_stickers: Dict[str, matrix.StickerInfo]
-                         ) -> Optional[matrix.StickerInfo]:
+async def upload_sticker(
+    file: str, directory: str, old_stickers: Dict[str, matrix.StickerInfo]
+) -> Optional[matrix.StickerInfo]:
     if file.startswith("."):
         return None
     path = os.path.join(directory, file)
@@ -52,7 +55,7 @@ async def upload_sticker(file: str, directory: str, old_stickers: Dict[str, matr
         mime = magic.from_file(path, mime=True)
     else:
         mime, _ = mimetypes.guess_type(file)
-    if not mime.startswith("image/"):
+    if mime is None or not mime.startswith("image/"):
         return None
 
     print(f"Processing {file}", end="", flush=True)
@@ -78,11 +81,15 @@ async def upload_sticker(file: str, directory: str, old_stickers: Dict[str, matr
         }
         print(f".. using existing upload")
     else:
-        image_data, width, height = util.convert_image(image_data)
+        upload_data, upload_mime, width, height = util.prepare_image_for_upload(
+            image_data, mime=mime
+        )
         print(".", end="", flush=True)
-        mxc = await matrix.upload(image_data, "image/png", file)
+        mxc = await matrix.upload(upload_data, upload_mime, file)
         print(".", end="", flush=True)
-        sticker = util.make_sticker(mxc, width, height, len(image_data), name)
+        sticker = util.make_sticker(
+            mxc, width, height, len(upload_data), name, mimetype=upload_mime
+        )
         sticker["id"] = sticker_id
         print(" uploaded", flush=True)
     return sticker
@@ -112,7 +119,7 @@ async def main(args: argparse.Namespace) -> None:
     for file in sorted(os.listdir(args.path)):
         sticker = await upload_sticker(file, args.path, old_stickers=old_stickers)
         if sticker:
-            stickers_data[sticker["url"]]  = Path(args.path, file).read_bytes()
+            stickers_data[sticker["url"]] = Path(args.path, file).read_bytes()
             pack["stickers"].append(sticker)
 
     with util.open_utf8(meta_path, "w") as pack_file:
@@ -131,14 +138,23 @@ async def main(args: argparse.Namespace) -> None:
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--config",
-                    help="Path to JSON file with Matrix homeserver and access_token",
-                    type=str, default="config.json", metavar="file")
-parser.add_argument("--title", help="Override the sticker pack displayname", type=str,
-                    metavar="title")
+parser.add_argument(
+    "--config",
+    help="Path to JSON file with Matrix homeserver and access_token",
+    type=str,
+    default="config.json",
+    metavar="file",
+)
+parser.add_argument(
+    "--title", help="Override the sticker pack displayname", type=str, metavar="title"
+)
 parser.add_argument("--id", help="Override the sticker pack ID", type=str, metavar="id")
-parser.add_argument("--add-to-index", help="Sticker picker pack directory (usually 'web/packs/')",
-                    type=str, metavar="path")
+parser.add_argument(
+    "--add-to-index",
+    help="Sticker picker pack directory (usually 'web/packs/')",
+    type=str,
+    metavar="path",
+)
 parser.add_argument("path", help="Path to the sticker pack directory", type=str)
 
 

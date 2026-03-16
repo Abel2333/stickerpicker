@@ -24,22 +24,56 @@ from PIL import Image
 
 from . import matrix
 
-open_utf8 = partial(open, encoding='UTF-8')
+open_utf8 = partial(open, encoding="UTF-8")
 
-def convert_image(data: bytes, max_w=256, max_h=256) -> (bytes, int, int):
-    image: Image.Image = Image.open(BytesIO(data)).convert("RGBA")
-    new_file = BytesIO()
-    image.save(new_file, "png")
-    w, h = image.size
+
+def is_animated_image(data: bytes) -> bool:
+    with Image.open(BytesIO(data)) as image:
+        return (
+            getattr(image, "is_animated", False) and getattr(image, "n_frames", 1) > 1
+        )
+
+
+def get_display_size(
+    data: bytes, max_w: int = 256, max_h: int = 256
+) -> tuple[int, int]:
+    with Image.open(BytesIO(data)) as image:
+        w, h = image.size
+
     if w > max_w or h > max_h:
-        # Set the width and height to lower values so clients wouldn't show them as huge images
         if w > h:
             h = int(h / (w / max_w))
             w = max_w
         else:
             w = int(w / (h / max_h))
             h = max_h
+
+    return w, h
+
+
+def convert_static_image(
+    data: bytes, max_w: int = 256, max_h: int = 256
+) -> tuple[bytes, int, int]:
+    with Image.open(BytesIO(data)) as image:
+        converted = image.convert("RGBA")
+        new_file = BytesIO()
+        converted.save(new_file, "PNG")
+
+    w, h = get_display_size(data, max_w, max_h)
     return new_file.getvalue(), w, h
+
+
+def prepare_image_for_upload(
+    data: bytes, mime: str, max_w: int = 256, max_h: int = 256
+) -> tuple[bytes, str, int, int]:
+    w, h = get_display_size(data, max_w=max_w, max_h=max_h)
+
+    if mime == "image/gif" and is_animated_image(data):
+        return data, mime, w, h
+
+    converted_data, w, h = convert_static_image(data, max_w=max_w, max_h=max_h)
+
+    return converted_data, "image/png", w, h
 
 
 def add_to_index(name: str, output_dir: str) -> None:
@@ -58,8 +92,9 @@ def add_to_index(name: str, output_dir: str) -> None:
         print(f"Added {name} to {index_path}")
 
 
-def make_sticker(mxc: str, width: int, height: int, size: int,
-                 body: str = "") -> matrix.StickerInfo:
+def make_sticker(
+    mxc: str, width: int, height: int, size: int, body: str = "", mimetype: str = "image/png"
+) -> matrix.StickerInfo:
     return {
         "body": body,
         "url": mxc,
@@ -67,28 +102,29 @@ def make_sticker(mxc: str, width: int, height: int, size: int,
             "w": width,
             "h": height,
             "size": size,
-            "mimetype": "image/png",
-
+            "mimetype": mimetype,
             # Element iOS compatibility hack
             "thumbnail_url": mxc,
             "thumbnail_info": {
                 "w": width,
                 "h": height,
                 "size": size,
-                "mimetype": "image/png",
+                "mimetype": mimetype,
             },
         },
         "msgtype": "m.sticker",
     }
 
 
-def add_thumbnails(stickers: List[matrix.StickerInfo], stickers_data: Dict[str, bytes], output_dir: str) -> None:
+def add_thumbnails(
+    stickers: List[matrix.StickerInfo], stickers_data: Dict[str, bytes], output_dir: str
+) -> None:
     thumbnails = Path(output_dir, "thumbnails")
     thumbnails.mkdir(parents=True, exist_ok=True)
 
-    for sticker in stickers:       
-        image_data, _, _ = convert_image(stickers_data[sticker["url"]], 128, 128)
-        
+    for sticker in stickers:
+        image_data, _, _ = convert_static_image(stickers_data[sticker["url"]], 128, 128)
+
         name = sticker["url"].split("/")[-1]
         thumbnail_path = thumbnails / name
         thumbnail_path.write_bytes(image_data)
